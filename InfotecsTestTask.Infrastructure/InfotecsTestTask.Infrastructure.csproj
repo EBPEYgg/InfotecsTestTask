@@ -19,6 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\InfotecsTestTask.Application\InfotecsTestTask.Application.csproj" />
     <ProjectReference Include="..\InfotecsTestTask.Domain\InfotecsTestTask.Domain.csproj" />
   </ItemGroup>
 

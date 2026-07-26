@@ -19,10 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Controllers\" />
-  </ItemGroup>
-
-  <ItemGroup>
+    <ProjectReference Include="..\InfotecsTestTask.Application\InfotecsTestTask.Application.csproj" />
     <ProjectReference Include="..\InfotecsTestTask.Infrastructure\InfotecsTestTask.Infrastructure.csproj" />
   </ItemGroup>
 

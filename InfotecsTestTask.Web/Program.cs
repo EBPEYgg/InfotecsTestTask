@@ -1,3 +1,4 @@
+using InfotecsTestTask.Infrastructure.Persistence;
 using InfotecsTestTask.Web.Extensions;
 using NLog;
 using NLog.Web;
@@ -20,6 +21,7 @@ logger.Info("Starting the app");
 
 if (app.Environment.IsDevelopment())
 {
+    app.Services.ApplyMigrations();
     app.UseSwagger();
     app.UseSwaggerUI();
 }
