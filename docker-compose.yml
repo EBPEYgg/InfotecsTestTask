@@ -1,0 +1,23 @@
+services:
+  api:
+    image: timescale-data-api:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "5000:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - POSTGRES_PASSWORD=admin
+    depends_on:
+      - db
+
+  db:
+    container_name: postgres_db
+    image: postgres:17
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=admin
+      - POSTGRES_DB=timescale-data
+    ports:
+      - "5432:5432"
