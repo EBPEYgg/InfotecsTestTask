@@ -33,15 +33,14 @@ public static class ServiceCollectionsExtensions
 
     public static WebApplicationBuilder AddApplicationServices(this WebApplicationBuilder builder)
     {
-        //builder.Services.AddScoped<ICsvImportService, CsvImportService>();
-        //builder.Services.AddSingleton<ITimeProvider, SystemTimeProvider>();
+        builder.Services.AddScoped<ICsvImportService, CsvImportService>();
 
         return builder;
     }
 
     public static WebApplicationBuilder AddRepositories(this WebApplicationBuilder builder)
     {
-        //builder.Services.AddScoped<ITimescaleDataRepository, TimescaleDataRepository>();
+        builder.Services.AddScoped<ITimescaleDataRepository, TimescaleDataRepository>();
 
         return builder;
     }

@@ -14,7 +14,8 @@ builder.Services.AddEndpointsApiExplorer();
 builder
     .AddSwagger()
     .AddData()
-    .AddApplicationServices();
+    .AddApplicationServices()
+    .AddRepositories();
 
 var app = builder.Build();
 logger.Info("Starting the app");
