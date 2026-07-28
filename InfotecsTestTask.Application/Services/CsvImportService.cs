@@ -10,7 +10,7 @@ namespace InfotecsTestTask.Application.Services;
 
 public class CsvImportService(ITimescaleDataRepository repository) : ICsvImportService
 {
-    #region Поля
+    #region РџРѕР»СЏ
 
     private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
@@ -20,34 +20,40 @@ public class CsvImportService(ITimescaleDataRepository repository) : ICsvImportS
 
     private const int MaxRowsCount = 10_000;
 
-    private static readonly string DateFormats = "yyyy-MM-dd'T'HH-mm-ss.FFFFFFF'Z'";
+    private const string DateFormat = "yyyy-MM-dd'T'HH-mm-ss.ffff'Z'";
 
     #endregion
 
-    #region Методы
+    #region РњРµС‚РѕРґС‹
 
-    public async Task<CsvImportResponse> ImportAsync(Stream csvStream, string fileName, CancellationToken cancellationToken)
+    public async Task<CsvImportResponse> ImportAsync(
+        Stream csvStream, 
+        string fileName, 
+        CancellationToken cancellationToken)
     {
         if (csvStream is null)
-            throw new CsvValidationException("Наличие потока чтения CSV файла является обязательным.");
+            throw new CsvValidationException("РќР°Р»РёС‡РёРµ РїРѕС‚РѕРєР° С‡С‚РµРЅРёСЏ CSV С„Р°Р№Р»Р° СЏРІР»СЏРµС‚СЃСЏ РѕР±СЏР·Р°С‚РµР»СЊРЅС‹Рј.");
 
         fileName = Path.GetFileName(fileName);
         if (string.IsNullOrWhiteSpace(fileName))
-            throw new CsvValidationException("Имя файла обязательно.");
+            throw new CsvValidationException("РРјСЏ С„Р°Р№Р»Р° РѕР±СЏР·Р°С‚РµР»СЊРЅРѕ.");
 
         var values = await ParseAsync(csvStream, fileName, cancellationToken);
         var result = BuildResult(fileName, values);
 
         await repository.ReplaceFileDataAsync(fileName, values, result, cancellationToken);
-        _logger.Info("Из файла {FileName} импортировано строк: {RowsCount}", fileName, values.Count);
+        _logger.Info("РР· С„Р°Р№Р»Р° {FileName} РёРјРїРѕСЂС‚РёСЂРѕРІР°РЅРѕ СЃС‚СЂРѕРє: {RowsCount}", fileName, values.Count);
 
-        return new CsvImportResponse(fileName, values.Count, ResultsMapper.ToDto(result));
+        return new CsvImportResponse(fileName, values.Count, result.ToDto());
     }
 
-    private async Task<IReadOnlyCollection<Values>> ParseAsync(Stream csvStream, string fileName, CancellationToken cancellationToken)
+    private async Task<IReadOnlyCollection<Values>> ParseAsync(
+        Stream csvStream, 
+        string fileName, 
+        CancellationToken cancellationToken)
     {
         using var reader = new StreamReader(csvStream);
-        var header = await reader.ReadLineAsync(cancellationToken) ?? throw new CsvValidationException("CSV file is empty.");
+        var header = await reader.ReadLineAsync(cancellationToken) ?? throw new CsvValidationException("CSV С„Р°Р№Р» РїСѓСЃС‚РѕР№.");
         ValidateHeader(header);
 
         var values = new List<Values>();
@@ -69,20 +75,22 @@ public class CsvImportService(ITimescaleDataRepository repository) : ICsvImportS
 
             if (dataRowsCount > MaxRowsCount)
             {
-                errors.Add($"Максимальное количество строк CSV файла: {MaxRowsCount}.");
+                errors.Add($"РњР°РєСЃРёРјР°Р»СЊРЅРѕРµ РєРѕР»РёС‡РµСЃС‚РІРѕ СЃС‚СЂРѕРє РІ CSV С„Р°Р№Р»Рµ: {MaxRowsCount}.");
                 break;
             }
 
-            var parsed = TryParseRow(line, rowNumber, fileName, errors);
-            if (parsed is not null)
-            {
-                values.Add(parsed);
-            }
+            var rowErrors = new List<string>();
+            var parsedValue = ParseRow(line, rowNumber, fileName, rowErrors);
+
+            if (rowErrors.Count > 0)
+                errors.AddRange(rowErrors);
+            else
+                values.Add(parsedValue!);
         }
 
         if (values.Count < MinRowsCount)
         {
-            errors.Add($"Минимальное количество строк в файле CSV: {MinRowsCount}.");
+            errors.Add($"РњРёРЅРёРјР°Р»СЊРЅРѕРµ РєРѕР»РёС‡РµСЃС‚РІРѕ СЃС‚СЂРѕРє РІ CSV С„Р°Р№Р»Рµ: {MinRowsCount}.");
         }
 
         if (errors.Count > 0)
@@ -95,90 +103,92 @@ public class CsvImportService(ITimescaleDataRepository repository) : ICsvImportS
 
     private static void ValidateHeader(string header)
     {
-        string cleanHeader = header.Trim('"');
-        var columns = cleanHeader.Split(';', StringSplitOptions.TrimEntries);
+        var columns = CleanCsvLine(header).Split(';', StringSplitOptions.TrimEntries);
         if (columns.Length != 3 ||
             columns[0] != "Date" ||
             columns[1] != "ExecutionTime" ||
             columns[2] != "Value")
         {
-            throw new CsvValidationException("Заголовок в CSV файле должен быть: Date;ExecutionTime;Value");
+            throw new CsvValidationException("Р—Р°РіРѕР»РѕРІРѕРє РІ CSV С„Р°Р№Р»Рµ РґРѕР»Р¶РµРЅ Р±С‹С‚СЊ: Date;ExecutionTime;Value");
         }
     }
 
-    private Values? TryParseRow(string line, int rowNumber, string fileName, ICollection<string> errors)
+    private Values? ParseRow(string line, int rowNumber, string fileName, ICollection<string> errors)
     {
-        var rowErrorsCount = errors.Count;
-        var clearLine = line.Trim('"');
-        var columns = clearLine.Split(';', StringSplitOptions.TrimEntries);
+        var columns = CleanCsvLine(line).Split(';', StringSplitOptions.TrimEntries);
         if (columns.Length != 3 || columns.Any(string.IsNullOrWhiteSpace))
         {
-            errors.Add($"Строка {rowNumber}: дата, время выполнения и значение показателя обязательны.");
+            errors.Add($"РЎС‚СЂРѕРєР° {rowNumber}: Date, ExecutionTime Рё Value СЏРІР»СЏСЋС‚СЃСЏ РѕР±СЏР·Р°С‚РµР»СЊРЅС‹РјРё.");
             return null;
         }
 
-        if (!TryParseDate(columns[0], out var date))
-        {
-            errors.Add($"Строка {rowNumber}: дата имеет неверный формат.");
-        }
-        else if (date < MinAllowedDate || date > DateTime.UtcNow)
-        {
-            errors.Add($"Строка {rowNumber}: дата не может быть позже текущей (UTC) и раньше 01.01.2000.");
-        }
+        var date = ParseDate(columns[0], rowNumber, errors);
+        var executionTime = ParseNonNegativeDouble(columns[1], rowNumber, "ExecutionTime", errors);
+        var value = ParseNonNegativeDouble(columns[2], rowNumber, "Value", errors);
 
-        if (!double.TryParse(columns[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var executionTime))
-        {
-            errors.Add($"Строка {rowNumber}: время выполнения должно быть числом или цифрой.");
-        }
-        else if (executionTime < 0)
-        {
-            errors.Add($"Строка {rowNumber}: время выполнения не может быть меньше 0.");
-        }
-
-        if (!double.TryParse(columns[2], NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
-        {
-            errors.Add($"Строка {rowNumber}: значение показателя должно быть числом или цифрой.");
-        }
-        else if (value < 0)
-        {
-            errors.Add($"Строка {rowNumber}: значение показателя не может быть меньше 0.");
-        }
-
-        if (errors.Count != rowErrorsCount)
-        {
+        if (errors.Count > 0)
             return null;
-        }
 
         return new Values
         {
             Id = Guid.NewGuid(),
             FileName = fileName,
-            Date = date,
-            ExecutionTime = executionTime,
-            Value = value
+            Date = date!.Value,
+            ExecutionTime = executionTime!.Value,
+            Value = value!.Value
         };
+    }
+
+    private static string CleanCsvLine(string line) => line.Trim('"');
+
+    private DateTime? ParseDate(string rawValue, int rowNumber, ICollection<string> errors)
+    {
+        if (!TryParseDate(rawValue, out var date))
+        {
+            errors.Add($"РЎС‚СЂРѕРєР° {rowNumber}: РґР°С‚Р° РёРјРµРµС‚ РЅРµРІРµСЂРЅС‹Р№ С„РѕСЂРјР°С‚.");
+            return null;
+        }
+
+        if (date < MinAllowedDate || date > DateTime.UtcNow)
+        {
+            errors.Add($"РЎС‚СЂРѕРєР° {rowNumber}: РґР°С‚Р° РЅРµ РјРѕР¶РµС‚ Р±С‹С‚СЊ РїРѕР·Р¶Рµ С‚РµРєСѓС‰РµР№ (UTC) Рё СЂР°РЅСЊС€Рµ 01.01.2000.");
+            return null;
+        }
+
+        return date;
+    }
+
+    private static double? ParseNonNegativeDouble(
+        string rawValue, 
+        int rowNumber, 
+        string fieldName, 
+        ICollection<string> errors)
+    {
+        if (!double.TryParse(rawValue, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
+        {
+            errors.Add($"РЎС‚СЂРѕРєР° {rowNumber}: {fieldName} РґРѕР»Р¶РЅРѕ Р±С‹С‚СЊ С‡РёСЃР»РѕРј РёР»Рё С†РёС„СЂРѕР№.");
+            return null;
+        }
+
+        if (value < 0)
+        {
+            errors.Add($"РЎС‚СЂРѕРєР° {rowNumber}: {fieldName} РЅРµ РјРѕР¶РµС‚ Р±С‹С‚СЊ РјРµРЅСЊС€Рµ 0.");
+            return null;
+        }
+
+        return value;
     }
 
     private static bool TryParseDate(string value, out DateTime date)
     {
         if (DateTime.TryParseExact(
                 value,
-                DateFormats,
+                DateFormat,
                 CultureInfo.InvariantCulture,
                 DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
                 out date))
         {
             date = DateTime.SpecifyKind(date, DateTimeKind.Utc);
-            return true;
-        }
-
-        if (DateTimeOffset.TryParse(
-                value,
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
-                out var offset))
-        {
-            date = offset.UtcDateTime;
             return true;
         }
 
@@ -188,10 +198,9 @@ public class CsvImportService(ITimescaleDataRepository repository) : ICsvImportS
 
     private static Results BuildResult(string fileName, IReadOnlyCollection<Values> values)
     {
-        int count = values.Count;
         var orderedValues = values.Select(x => x.Value).Order().ToArray();
         
-        var maxValue = orderedValues[count - 1];
+        var maxValue = orderedValues[^1];
         var minValue = orderedValues[0];
 
         var median = orderedValues.Length % 2 == 1
