@@ -20,12 +20,9 @@ builder
 var app = builder.Build();
 logger.Info("Starting the app");
 
-if (app.Environment.IsDevelopment())
-{
-    app.Services.ApplyMigrations();
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+app.Services.ApplyMigrations();
+app.UseSwagger();
+app.UseSwaggerUI();
 
 app.UseErrorHandling();
 app.UseHttpsRedirection();
